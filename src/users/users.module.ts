@@ -5,16 +5,18 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from './user.entity';
 import { UploadService } from '../common/upload/upload.service';
 import { PermissionsModule } from '../permissions/permissions.module';
-import { EmployeeInvite } from '../employee-invites/employee-invite.entity' 
+import { EmployeeInvite } from '../employee-invites/employee-invite.entity';
+import { Team } from '../teams/team.entity';
+import { TeamsModule } from '../teams/teams.module';  
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User,EmployeeInvite]),
+    TypeOrmModule.forFeature([User, EmployeeInvite, Team]),
+    TeamsModule,  
     PermissionsModule,
   ],
   controllers: [UsersController],
-  providers: [UsersService, UploadService],  
+  providers: [UsersService, UploadService],
   exports: [UsersService],
 })
 export class UsersModule {}
-

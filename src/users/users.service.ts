@@ -4,6 +4,7 @@ import type { Repository } from "typeorm"
 import { User } from "./user.entity"
 import { EmployeeInvite } from "../employee-invites/employee-invite.entity"
 import * as bcrypt from "bcrypt"
+import { Team } from "../teams/team.entity"
 
 export type RequestUser = {
   id: number
@@ -26,6 +27,8 @@ export class UsersService {
 
     @InjectRepository(EmployeeInvite)
     private inviteRepo: Repository<EmployeeInvite>,
+    @InjectRepository(Team)
+  private teamRepo: Repository<Team>, 
   ) {}
 
   async create(userData: {
@@ -60,7 +63,7 @@ export class UsersService {
     this.logger.log("Saving new user to database")
     const saved = await this.userRepo.save(newUser)
 
-    // ✅ If registering via invite → mark it accepted
+    // If registering via invite -> mark it accepted
     if (userData.token) {
       const invite = await this.inviteRepo.findOne({ where: { token: userData.token } })
       if (invite) {
@@ -181,6 +184,12 @@ export class UsersService {
       throw new NotFoundException(`User with ID ${id} not found`)
     }
   
+    //  Remove user from leader if needed
+    await this.teamRepo.update(
+      { leader: { id } },
+      { leader: undefined }  
+    )
+  
     user.is_deleted = true
     await this.userRepo.save(user)
   
@@ -188,5 +197,7 @@ export class UsersService {
   
     return { message: `User ${id} marked as deleted` }
   }
+  
+  
   
 }

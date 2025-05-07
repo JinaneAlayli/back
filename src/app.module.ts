@@ -15,6 +15,10 @@ import { AttendanceModule } from './attendance/attendance.module';
 import { SubscriptionPlansModule } from './subscription-plans/subscription-plans.module';
 import { SubscriptionPlansController } from './subscription-plans/subscription-plans.controller';
 import { SalariesModule } from './salaries/salaries.module';
+import { TasksModule } from './tasks/tasks.module';
+import { TasksController } from './tasks/tasks.controller';
+import { AnnouncementsModule } from './announcements/announcements.module';
+import { LeaveRequestsModule } from './leave-requests/leave-requests.module';
  
 @Module({
   imports: [
@@ -57,7 +61,10 @@ import { SalariesModule } from './salaries/salaries.module';
     AttendanceModule,
     SubscriptionPlansModule,
     SalariesModule,
+    TasksModule,
+    AnnouncementsModule,
+    LeaveRequestsModule,
     
   ],
- })
+  })
 export class AppModule {}

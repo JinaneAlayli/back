@@ -25,8 +25,7 @@ export class UploadService {
   async uploadProfileImage(file: MultipartFile, userId: number): Promise<string> {
     try {
       this.logger.log(`Starting upload for user ${userId}, file: ${file.filename}`)
-
-      // Validate file
+ 
       if (!file.mimetype.startsWith("image/")) {
         throw new InternalServerErrorException("Only image files are allowed")
       }
@@ -62,8 +61,7 @@ export class UploadService {
   async deleteProfileImage(filePath: string): Promise<void> {
     try {
       this.logger.log(`Deleting file: ${filePath}`)
-
-      // Extract the path from the full URL
+ 
       const pathParts = filePath.split(`${this.bucket}/`)
       const path = pathParts.length > 1 ? pathParts[1] : filePath
 

@@ -1,41 +1,59 @@
- import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Attendance } from './attendance.entity';
+import { User } from '../users/user.entity';
 
 @Injectable()
 export class AttendanceService {
   constructor(
     @InjectRepository(Attendance)
-    private readonly attendanceRepo: Repository<Attendance>,
+    private readonly repo: Repository<Attendance>,
   ) {}
 
-  findAll(): Promise<Attendance[]> {
-    return this.attendanceRepo.find({ relations: ['user'] });
+  async checkIn(user: User, data: any, ip: string) {
+    const today = new Date().toISOString().split('T')[0];
+
+    const existing = await this.repo.findOne({ where: { user_id: user.id, date: today } });
+    if (existing?.check_in) throw new BadRequestException('Already checked in');
+
+    const attendance = this.repo.create({
+      user_id: user.id,
+      date: today,
+      check_in: new Date().toTimeString().split(' ')[0],
+      location_lat: data.location_lat,
+      location_lng: data.location_lng,
+      ip_address: ip,
+      status: 'present',
+    });
+    return this.repo.save(attendance);
   }
 
-  findByUser(userId: number): Promise<Attendance[]> {
-    return this.attendanceRepo.find({ where: { user_id: userId } });
+  async checkOut(user: User) {
+    const today = new Date().toISOString().split('T')[0];
+    const record = await this.repo.findOne({ where: { user_id: user.id, date: today } });
+
+    if (!record || record.check_out) throw new BadRequestException('No check-in or already checked out');
+
+    const now = new Date();
+    const checkInTime = new Date(`${record.date}T${record.check_in}`);
+    const worked = (now.getTime() - checkInTime.getTime()) / (1000 * 60 * 60);
+
+    record.check_out = now.toTimeString().split(' ')[0];
+    record.worked_hours = parseFloat(worked.toFixed(2));
+
+    return this.repo.save(record);
   }
 
-  async submitAttendance(userId: number, date: string, type: 'check_in' | 'check_out'): Promise<Attendance> {
-    let record = await this.attendanceRepo.findOne({ where: { user_id: userId, date } });
+  async getAll(user: User) {
+    if ([2, 3].includes(user.role_id)) return this.repo.find({ relations: ['user'], order: { date: 'DESC' } });
+    if (user.role_id === 4) return this.repo
+      .createQueryBuilder('attendance')
+      .leftJoinAndSelect('attendance.user', 'user')
+      .where('user.team_id = :teamId', { teamId: user.team_id })
+      .orderBy('attendance.date', 'DESC')
+      .getMany();
 
-    const currentTime = new Date().toTimeString().split(' ')[0]; // e.g. 14:05:00
-
-    if (!record) {
-      record = this.attendanceRepo.create({ user_id: userId, date });
-    }
-
-    if (type === 'check_in') record.check_in = currentTime;
-    if (type === 'check_out') record.check_out = currentTime;
-
-    return this.attendanceRepo.save(record);
+    return this.repo.find({ where: { user_id: user.id }, order: { date: 'DESC' } });
   }
-
-  async update(id: number, data: Partial<Attendance>): Promise<Attendance> {
-    await this.attendanceRepo.update(id, data);
-    return this.attendanceRepo.findOneByOrFail({ id });
-  }
-  
 }

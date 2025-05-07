@@ -46,6 +46,9 @@ import {
   
     @Column({ nullable: true })
     file_url: string
+   
+    @Column({ default: false })
+    payslip_requested: boolean;
   
     @CreateDateColumn()
     created_at: Date

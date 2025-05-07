@@ -8,13 +8,16 @@ import {
   Param,
   UseGuards,
   Req,
-} from '@nestjs/common'
-import { SalariesService } from './salaries.service'
-import { JwtAuthGuard } from '../auth/jwt-auth.guard'
-import { PermissionsGuard } from '../common/guards/permissions.guard'
-import { Permissions } from '../common/decorators/permissions.decorator'
-import { FastifyRequest } from 'fastify'
-import { BadRequestException } from '@nestjs/common'
+  UploadedFile,
+  UseInterceptors,
+  BadRequestException,
+} from '@nestjs/common';
+import { SalariesService } from './salaries.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { PermissionsGuard } from '../common/guards/permissions.guard';
+import { Permissions } from '../common/decorators/permissions.decorator';
+import { FastifyRequest } from 'fastify';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('salaries')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -25,48 +28,65 @@ export class SalariesController {
   @Permissions('salaries', 'view')
   async getActiveSalariesForCompany(@Req() req: FastifyRequest) {
     const user = req.user as any;
-  
     if (!user?.company_id) {
       throw new BadRequestException('User not authenticated or missing company_id');
     }
-  
     return this.service.findActiveSalariesByCompany(user.company_id);
   }
-  
 
   @Get('user/:userId')
   @Permissions('salaries', 'view')
   getByUser(@Param('userId') userId: number) {
-    return this.service.findByUser(+userId)
+    return this.service.findByUser(+userId);
   }
 
   @Get(':id')
   @Permissions('salaries', 'view')
   getOne(@Param('id') id: number) {
-    return this.service.findOne(+id)
+    return this.service.findOne(+id);
   }
 
   @Post()
-@Permissions('salaries', 'create')
-async create(@Body() body: any) {
-  try {
-    return await this.service.create(body)
-  } catch (err) {
-    console.error(' Salary creation failed:', err)
-    throw err
+  @Permissions('salaries', 'create')
+  async create(@Body() body: any) {
+    try {
+      return await this.service.create(body);
+    } catch (err) {
+      console.error('Salary creation failed:', err);
+      throw err;
+    }
   }
-}
-
 
   @Patch(':id')
   @Permissions('salaries', 'update')
   update(@Param('id') id: number, @Body() body: any) {
-    return this.service.update(+id, body)
+    return this.service.update(+id, body);
   }
 
   @Delete(':id')
   @Permissions('salaries', 'delete')
   remove(@Param('id') id: number) {
-    return this.service.delete(+id)
+    return this.service.delete(+id);
+  }
+
+  @Get('me')
+  @Permissions('salaries', 'view_own')
+  getMySalaries(@Req() req: FastifyRequest) {
+    const user = req.user as any;
+    return this.service.findByUser(user.id);
+  }
+
+  @Post('request-payslip/:userId')
+  @Permissions('salaries', 'request_payslip')
+  requestPayslip(@Req() req: FastifyRequest, @Param('userId') userId: number) {
+    const currentUser = req.user as any;
+    return this.service.requestPayslip(currentUser, userId);
+  }
+
+  @Post(':id/upload-payslip')
+  @Permissions('salaries', 'update')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadPayslip(@Param('id') id: number, @UploadedFile() file: any) {
+    return this.service.uploadPayslip(+id, file);
   }
 }

@@ -31,7 +31,10 @@ export class BusinessSettingsController {
 
   @Post()
   @Permissions('business_settings', 'create')
-  async create(@Req() req: FastifyRequest, @Body() body: Partial<BusinessSetting>) {
+  async create(
+    @Req() req: FastifyRequest,
+    @Body() body: Partial<BusinessSetting>
+  ): Promise<BusinessSetting> {
     const user = req.user as any;
     const company_id = user.company_id;
 
@@ -45,47 +48,56 @@ export class BusinessSettingsController {
 
   @Patch(':id')
   @Permissions('business_settings', 'update')
-  async update(@Param('id') id: number, @Body() body: Partial<BusinessSetting>) {
+  async update(
+    @Param('id') id: number,
+    @Body() body: Partial<BusinessSetting>
+  ): Promise<BusinessSetting> {
     const existing = await this.service.findById(id);
     if (!existing) {
       throw new NotFoundException('Settings not found');
     }
+
     return this.service.update(id, body);
   }
-  @Put('me')
-@Permissions('business_settings', 'update')
-async upsertMySettings(
-  @Req() req: FastifyRequest,
-  @Body() body: Partial<BusinessSetting>
-): Promise<BusinessSetting> {
-  try {
+  @Get('me')
+  @Permissions('business_settings', 'view')
+  async getMyCompanySettings(@Req() req: FastifyRequest): Promise<BusinessSetting> {
     const user = req.user as any;
- 
+    if (!user?.company_id) throw new ConflictException('Missing company ID');
+  
+    const settings = await this.service.findByCompany(user.company_id);
+    if (!settings) throw new NotFoundException('Settings not found for your company');
+  
+    return settings;
+  }
+  
+  @Put('me')
+  @Permissions('business_settings', 'update')
+  async upsertMySettings(
+    @Req() req: FastifyRequest,
+    @Body() body: Partial<BusinessSetting>
+  ): Promise<BusinessSetting> {
+    const user = req.user as any;
 
     if (!user?.company_id) {
-      throw new Error("User does not belong to a company");
+      throw new ConflictException('User is not linked to a company');
     }
 
     const existing = await this.service.findByCompany(user.company_id);
 
-    if (existing) { 
+    if (existing) {
       return this.service.update(existing.id, {
         ...body,
-        overtime_rate: body.overtime_rate ? Number(body.overtime_rate) : existing.overtime_rate,
+        overtime_rate: body.overtime_rate != null ? Number(body.overtime_rate) : existing.overtime_rate,
         annual_leave_days: body.annual_leave_days ?? existing.annual_leave_days,
         sick_leave_days: body.sick_leave_days ?? existing.sick_leave_days,
       });
-    } else { 
-      return this.service.create({
-        ...body,
-        company_id: user.company_id,
-        overtime_rate: body.overtime_rate ? Number(body.overtime_rate) : 1.5,
-      });
     }
-  } catch (err) { 
-    throw err;
+
+    return this.service.create({
+      ...body,
+      company_id: user.company_id,
+      overtime_rate: body.overtime_rate != null ? Number(body.overtime_rate) : 1.5,
+    });
   }
-}
-
-
 }

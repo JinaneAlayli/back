@@ -14,19 +14,18 @@ async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter({
-      logger: true, // Enable Fastify logger
+      logger: true,  
     }),
   )
 
   logger.log("Registering Fastify plugins")
-
-  // Configure multipart with appropriate limits
+ 
   await app.register(multipart, {
     limits: {
-      fileSize: 10 * 1024 * 1024, // 10MB
-      files: 1, // Only allow one file per request
+      fileSize: 10 * 1024 * 1024,  
+      files: 1,  
     },
-    attachFieldsToBody: false, // Important: Don't attach fields to body for streaming
+    attachFieldsToBody: false,  
   })
 
   logger.log("Multipart plugin registered")
@@ -47,18 +46,15 @@ async function bootstrap() {
   })
 
   logger.log(`CORS configured with origins: ${corsOrigins.join(", ")}`)
-
-  // Configure global prefix if needed
+ 
   if (process.env.API_PREFIX) {
     app.setGlobalPrefix(process.env.API_PREFIX)
     logger.log(`Global prefix set to: ${process.env.API_PREFIX}`)
   }
-
-  // Get port and host from environment
+ 
   const PORT = Number.parseInt(process.env.PORT || "5000", 10)
   const HOST = process.env.HOST || (process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost")
-
-  // Start the server
+ 
   await app.listen(PORT, HOST)
   logger.log(`Server running at http://${HOST}:${PORT}`)
 }
