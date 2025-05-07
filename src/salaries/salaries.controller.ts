@@ -17,7 +17,8 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { Permissions } from '../common/decorators/permissions.decorator';
 import { FastifyRequest } from 'fastify';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { User } from '../users/user.entity'
+
 
 @Controller('salaries')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -47,21 +48,19 @@ export class SalariesController {
   }
 
   @Post()
-  @Permissions('salaries', 'create')
-  async create(@Body() body: any) {
-    try {
-      return await this.service.create(body);
-    } catch (err) {
-      console.error('Salary creation failed:', err);
-      throw err;
-    }
-  }
+@Permissions('salaries', 'create')
+async create(@Body() body: any, @Req() req: FastifyRequest) {
+  const user = req.user as User;
+  return this.service.create(body, user);
+}
 
-  @Patch(':id')
-  @Permissions('salaries', 'update')
-  update(@Param('id') id: number, @Body() body: any) {
-    return this.service.update(+id, body);
-  }
+
+@Patch(':id')
+@Permissions('salaries', 'update')
+update(@Param('id') id: number, @Body() body: any, @Req() req: FastifyRequest) {
+  const user = req.user as User;
+  return this.service.update(+id, body, user);
+}
 
   @Delete(':id')
   @Permissions('salaries', 'delete')
@@ -84,9 +83,35 @@ export class SalariesController {
   }
 
   @Post(':id/upload-payslip')
-  @Permissions('salaries', 'update')
-  @UseInterceptors(FileInterceptor('file'))
-  uploadPayslip(@Param('id') id: number, @UploadedFile() file: any) {
-    return this.service.uploadPayslip(+id, file);
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Permissions('salaries', 'upload_payslip') // ✅ Now it matches DB
+  async uploadPayslip(@Param('id') id: number, @Req() req: FastifyRequest) {
+    const parts = req.parts()
+    let file: any = null
+  
+    for await (const part of parts) {
+      if (part.type === 'file') {
+        file = part
+        break
+      }
+    }
+  
+    if (!file) {
+      throw new BadRequestException('No file uploaded')
+    }
+  
+    return this.service.uploadPayslip(+id, file)
   }
+  @Get(':id/download-payslip')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Permissions('salaries', 'download_payslip')
+  async downloadPayslip(@Param('id') id: string, @Req() req: FastifyRequest) {
+    if (!req.user) {
+      throw new BadRequestException('User not authenticated');
+    }
+  
+return this.service.downloadPayslip(+id, req.user as User);
+  }
+  
+
 }

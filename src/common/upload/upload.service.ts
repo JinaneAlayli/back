@@ -21,7 +21,39 @@ export class UploadService {
     this.supabase = createClient(supabaseUrl, supabaseKey)
     this.logger.log("Supabase client initialized")
   }
-
+  async uploadPayslipFile(file: MultipartFile, userId: number): Promise<string> {
+    try {
+      this.logger.log(`Uploading payslip for user ${userId}, file: ${file.filename}`)
+  
+      if (file.mimetype !== 'application/pdf') {
+        throw new InternalServerErrorException("Only PDF files are allowed")
+      }
+  
+      const buffer = await file.toBuffer()
+      const fileExt = file.filename.split(".").pop()
+      const timestamp = Date.now()
+      const filePath = `users/${userId}/payslip-${timestamp}.${fileExt}`
+  
+      const { data, error } = await this.supabase.storage.from(this.bucket).upload(filePath, buffer, {
+        contentType: file.mimetype,
+        upsert: true,
+      })
+  
+      if (error) {
+        this.logger.error(`Upload failed: ${error.message}`, error.stack)
+        throw new InternalServerErrorException(`Failed to upload payslip: ${error.message}`)
+      }
+  
+      const { data: urlData } = this.supabase.storage.from(this.bucket).getPublicUrl(filePath)
+  
+      this.logger.log(`Payslip uploaded: ${urlData.publicUrl}`)
+      return urlData.publicUrl
+    } catch (error) {
+      this.logger.error(`Payslip upload error: ${error.message}`, error.stack)
+      throw new InternalServerErrorException(`Upload failed: ${error.message}`)
+    }
+  }
+  
   async uploadProfileImage(file: MultipartFile, userId: number): Promise<string> {
     try {
       this.logger.log(`Starting upload for user ${userId}, file: ${file.filename}`)
@@ -78,4 +110,6 @@ export class UploadService {
       throw new InternalServerErrorException(`Failed to delete image: ${error.message}`)
     }
   }
+  
+
 }
