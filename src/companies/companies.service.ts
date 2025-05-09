@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException,ForbiddenException,NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Company } from './company.entity';
@@ -121,4 +121,90 @@ export class CompaniesService {
     const randNumbers = Math.floor(1000 + Math.random() * 9000);
     return `BTEAM-${randLetters}${randNumbers}`;
   }
+
+  async renewSubscription(user: User) {
+    if (user.role_id !== 2) throw new ForbiddenException("Only company owners can renew");
+  
+    const company = await this.companyRepo.findOne({
+      where: { owner_id: user.id },
+      relations: ['subscription_plan'],
+    });
+  
+    if (!company) throw new BadRequestException("Company not found");
+  
+    const now = new Date();
+    const endsAt = new Date(company.ends_at);
+    const plan = company.subscription_plan;
+  
+    if (!plan) throw new BadRequestException("Subscription plan not found");
+  
+    const diffDays = Math.ceil((endsAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  
+    if (diffDays > 3) {
+      throw new BadRequestException("Too early to renew. You can renew only 3 days before expiry or after.");
+    }
+  
+    const monthsToAdd = company.billing_cycle === 'yearly' ? 12 : 1;
+  
+    const newEndsAt = new Date(endsAt > now ? endsAt : now);
+    newEndsAt.setMonth(newEndsAt.getMonth() + monthsToAdd);
+  
+    const cycleMultiplier = company.billing_cycle === 'yearly'
+      ? 12 * (1 - (Number(plan.discount_percent) / 100))
+      : 1;
+  
+    const amount = Number(plan.price) * cycleMultiplier;
+  
+    const payment = this.paymentRepo.create({
+      company_id: company.id,
+      amount,
+      payment_provider: 'manual',
+      payment_status: 'completed',
+      transaction_id: `RENEW-${Date.now()}`,
+      checkout_session_id: `RENEW-${Date.now()}`,
+    });
+    await this.paymentRepo.save(payment);
+  
+    company.ends_at = newEndsAt;
+    await this.companyRepo.save(company);
+  
+    return {
+      message: "Renewal successful",
+      new_ends_at: newEndsAt,
+    };
+  }
+  async findCompanyByOwnerId(ownerId: number) {
+    const company = await this.companyRepo.findOne({
+      where: { owner_id: ownerId },
+      relations: ['subscription_plan'],
+    });
+  
+    if (!company) throw new NotFoundException('Company not found');
+  
+    return company;
+  }
+  
+  async getAllWithOwnersAndPlans(): Promise<Company[]> {
+    return this.companyRepo.find({
+      relations: ['owner', 'subscription_plan'],
+      order: { created_at: 'DESC' },
+    });
+  }
+  async updateCompany(id: number, data: Partial<Company>) {
+    const company = await this.companyRepo.findOne({ where: { id } });
+    if (!company) throw new NotFoundException("Company not found");
+  
+    Object.assign(company, data);
+    return this.companyRepo.save(company);
+  }
+  
+  async hardDeleteCompany(id: number) {
+    const company = await this.companyRepo.findOne({ where: { id } });
+    if (!company) throw new NotFoundException("Company not found");
+  
+    await this.companyRepo.remove(company); // This triggers cascading delete
+    return { message: "Company and all related data deleted" };
+  }
+  
+  
 }

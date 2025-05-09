@@ -87,9 +87,8 @@ export class UsersController {
     if (!user) {
       throw new NotFoundException("User not found")
     }
-  
-    // ✅ Only allow update if the user is from same company
-    if (req.user?.company_id !== user.company_id) {
+   
+    if (req.user?.role_id !== 1 && req.user?.company_id !== user.company_id) {
       throw new ForbiddenException("You can only update users from your own company")
     }
   
@@ -106,7 +105,7 @@ async deleteUser(@Param('id') id: string, @Req() req: FastifyRequest) {
 
   if (!user) throw new NotFoundException('User not found')
 
-  if (user.company_id !== req.user?.company_id) {
+    if (req.user?.role_id !== 1 && req.user?.company_id !== user.company_id) {
     throw new ForbiddenException('Not your company user')
   }
 

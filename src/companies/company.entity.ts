@@ -10,6 +10,9 @@ export class Company {
 
   @Column()
   name: string;
+  
+  @Column({ default: false })
+  renew_requested: boolean;
 
   @Column()
   owner_id: number;
@@ -39,8 +42,7 @@ subscription_plan: SubscriptionPlan;
   @Column({ type: 'timestamp', nullable: true })
   ends_at: Date;
 
-  @Column({ default: true })
-  auto_renew: boolean;
+   
   @Column({ nullable: true })
   billing_cycle: string;
   
