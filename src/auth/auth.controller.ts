@@ -25,12 +25,13 @@ export class AuthController {
     const { token, user } = await this.authService.login(body.email, body.password);
 
     res.setCookie('jwt', token, {
-      httpOnly: true,
-      secure: false,
-      sameSite: 'lax',
-      maxAge: 1000 * 60 * 60 * 24,
-      path: '/',
-    });
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',  
+  sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+  maxAge: 1000 * 60 * 60 * 24,
+  path: '/',
+});
+
 
     return {
       message: 'Login successful!',
