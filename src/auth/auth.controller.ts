@@ -46,13 +46,18 @@ export class AuthController {
     };
   }
 
-  @Post('logout')
-  @HttpCode(200)
-  logout(@Res({ passthrough: true }) res: FastifyReply) {
-    res.clearCookie('jwt', { path: '/' });
-    return { message: 'Logged out successfully!' };
-  }
- 
+@Post('logout')
+@HttpCode(200)
+logout(@Res({ passthrough: true }) res: FastifyReply) {
+  res.clearCookie('jwt', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    path: '/',
+  })
+  return { message: 'Logged out successfully!' }
+}
+
   @Get('me')
   @UseGuards(JwtAuthGuard)
   async me(@Req() req: FastifyRequest) {
