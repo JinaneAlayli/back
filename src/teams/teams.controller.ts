@@ -27,9 +27,11 @@ export class TeamsController {
 
   @Get()
   @Permissions('teams', 'view')
-  getAll() {
-    return this.teamsService.findAll()
-  }
+  getAll(@Req() req) {
+  const companyId = req.user.company_id;
+  return this.teamsService.findByCompany(companyId)
+}
+
 
   @Get('company/:companyId')
   @Permissions('teams', 'view')

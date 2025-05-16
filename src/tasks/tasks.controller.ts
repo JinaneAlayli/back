@@ -12,13 +12,14 @@ export class TasksController {
     return this.tasksService.create(body, req.user.id);
   }
 
-  @Get()
-  findAll(@Req() req: any) {
-    if (req.user.role_id !== 2) {
-      throw new Error('Unauthorized');
-    }
-    return this.tasksService.findAll();
+ @Get()
+findAll(@Req() req: any) {
+  if (req.user.role_id !== 2) {
+    throw new Error('Unauthorized');
   }
+  return this.tasksService.findAllForOwner(req.user.company_id);
+}
+
 
   @Get('my-tasks')
   findMyTasks(@Req() req: any) {
@@ -34,4 +35,14 @@ export class TasksController {
   delete(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     return this.tasksService.delete(id, req.user.id, req.user.role_id);
   }
+
+@Get('team-tasks')
+findForTeam(@Req() req: any) {
+  if (req.user.role_id !== 4) {
+    throw new Error('Unauthorized');
+  }
+  return this.tasksService.findByTeam(req.user.team_id);
+}
+
+
 }

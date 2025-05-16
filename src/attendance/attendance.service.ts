@@ -48,17 +48,30 @@ export class AttendanceService {
     return this.repo.save(record);
   }
 
-  async getAll(user: User) {
-    if ([2, 3].includes(user.role_id)) return this.repo.find({ relations: ['user'], order: { date: 'DESC' } });
-    if (user.role_id === 4) return this.repo
+ async getAll(user: User) {
+  if (user.role_id === 2 || user.role_id === 3) {
+     return this.repo
+      .createQueryBuilder('attendance')
+      .leftJoinAndSelect('attendance.user', 'user')
+      .where('user.company_id = :companyId', { companyId: user.company_id })
+      .getMany()
+  }
+
+  if (user.role_id === 4) {
+     
+    return this.repo
       .createQueryBuilder('attendance')
       .leftJoinAndSelect('attendance.user', 'user')
       .where('user.team_id = :teamId', { teamId: user.team_id })
-      .orderBy('attendance.date', 'DESC')
-      .getMany();
-
-    return this.repo.find({ where: { user_id: user.id }, order: { date: 'DESC' } });
+      .getMany()
   }
+ 
+  return this.repo.find({
+    where: { user_id: user.id },
+    relations: ['user'],
+  })
+}
+
   async getAttendanceSummary(userId: number, month: number, year: number) {
     const records = await this.repo
       .createQueryBuilder('attendance')

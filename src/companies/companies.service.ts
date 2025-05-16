@@ -36,81 +36,93 @@ export class CompaniesService {
     return this.companyRepo.save(company);
   }
 
-  async registerCompanyWithOwner(dto: RegisterCompanyDto) {
-    try {
-      const companyExists = await this.companyRepo.findOne({
-        where: { name: dto.company_name },
-      });
-      if (companyExists) throw new BadRequestException("Company already exists");
+async registerCompanyWithOwner(dto: RegisterCompanyDto) {
+  try {
+    const companyExists = await this.companyRepo.findOne({
+      where: { name: dto.company_name },
+    });
+    if (companyExists) throw new BadRequestException("Company already exists");
 
-      const userExists = await this.userRepo.findOne({
-        where: { email: dto.owner.email },
-      });
-      if (userExists) throw new BadRequestException("User already exists");
+    const userExists = await this.userRepo.findOne({
+      where: { email: dto.owner.email },
+    });
+    if (userExists) throw new BadRequestException("User already exists");
 
-      const salt = await bcrypt.genSalt();
-      const hashedPassword = await bcrypt.hash(dto.owner.password, salt);
+    const salt = await bcrypt.genSalt();
+    const hashedPassword = await bcrypt.hash(dto.owner.password, salt);
 
-      const owner = this.userRepo.create({
-        name: dto.owner.name,
-        email: dto.owner.email,
-        password: hashedPassword,
-        phone: dto.owner.phone,
-        role_id: 2,
-      });
-      const savedOwner = await this.userRepo.save(owner);
+    const owner = this.userRepo.create({
+      name: dto.owner.name,
+      email: dto.owner.email,
+      password: hashedPassword,
+      phone: dto.owner.phone,
+      role_id: 2,
+    });
+    const savedOwner = await this.userRepo.save(owner);
 
-      const code = this.generateCompanyCode();
+    const code = this.generateCompanyCode();
 
-      const company = this.companyRepo.create({
-        name: dto.company_name,
-        employee_nb: dto.employee_nb,
-        subscription_plan_id: dto.subscription_plan_id,
-        billing_cycle: dto.billing_cycle,
-        company_code: code,
-        status: "active",
-        owner_id: savedOwner.id,
-        started_at: new Date(),
-      });
+    const now = new Date();
+    let ends_at: Date;
 
-      const savedCompany = await this.companyRepo.save(company);
-
-      await this.userRepo.update(savedOwner.id, {
-        company_id: savedCompany.id,
-      });
-
-      const selectedPlan = await this.subscriptionRepo.findOne({ where: { id: dto.subscription_plan_id } });
-
-      if (!selectedPlan) throw new BadRequestException("Invalid subscription plan");
-
-      if (selectedPlan.price !== 0) {
-        const totalAmount = parseFloat(String(selectedPlan.price)) * (
-          dto.billing_cycle === 'yearly'
-            ? 12 * (1 - parseFloat(String(selectedPlan.discount_percent || '0')) / 100)
-            : 1
-        )
-        
-      
-        const payment = this.paymentRepo.create({
-          company_id: savedCompany.id,
-          amount: totalAmount,
-          payment_provider: 'manual',
-          payment_status: 'completed',
-          transaction_id: `TRX-${Date.now()}`,
-          checkout_session_id: `CS-${Date.now()}`,
-        });
-
-        await this.paymentRepo.save(payment);
-      }
-
-      return {
-        message: "Company and owner registered successfully",
-        redirect_to: "/business-settings",
-      };
-    } catch (error) {
-      throw new BadRequestException(error.message || "Something went wrong");
+    if (dto.billing_cycle === 'yearly') {
+      ends_at = new Date(now.setFullYear(now.getFullYear() + 1));
+    } else {
+      ends_at = new Date(now.setMonth(now.getMonth() + 1));
     }
+
+    const company = this.companyRepo.create({
+      name: dto.company_name,
+      employee_nb: dto.employee_nb,
+      subscription_plan_id: dto.subscription_plan_id,
+      billing_cycle: dto.billing_cycle,
+      company_code: code,
+      status: "active",
+      owner_id: savedOwner.id,
+      started_at: new Date(),
+      ends_at, 
+    });
+
+    const savedCompany = await this.companyRepo.save(company);
+
+    await this.userRepo.update(savedOwner.id, {
+      company_id: savedCompany.id,
+    });
+
+    const selectedPlan = await this.subscriptionRepo.findOne({
+      where: { id: dto.subscription_plan_id },
+    });
+
+    if (!selectedPlan) throw new BadRequestException("Invalid subscription plan");
+
+    if (selectedPlan.price !== 0) {
+      const totalAmount = parseFloat(String(selectedPlan.price)) * (
+        dto.billing_cycle === 'yearly'
+          ? 12 * (1 - parseFloat(String(selectedPlan.discount_percent || '0')) / 100)
+          : 1
+      );
+
+      const payment = this.paymentRepo.create({
+        company_id: savedCompany.id,
+        amount: totalAmount,
+        payment_provider: 'manual',
+        payment_status: 'completed',
+        transaction_id: `TRX-${Date.now()}`,
+        checkout_session_id: `CS-${Date.now()}`,
+      });
+
+      await this.paymentRepo.save(payment);
+    }
+
+    return {
+      message: "Company and owner registered successfully",
+      redirect_to: "/business-settings",
+    };
+  } catch (error) {
+    throw new BadRequestException(error.message || "Something went wrong");
   }
+}
+
 
   generateCompanyCode() {
     const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";

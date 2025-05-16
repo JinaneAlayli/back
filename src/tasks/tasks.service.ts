@@ -15,9 +15,21 @@ export class TasksService {
     return this.taskRepo.save(task);
   }
 
-  async findAll(): Promise<Task[]> {
-    return this.taskRepo.find();
-  }
+  async findAllForOwner(companyId: number): Promise<Task[]> {
+  return this.taskRepo
+    .createQueryBuilder('task')
+    .leftJoinAndSelect('task.user', 'user')
+    .where('user.company_id = :companyId', { companyId })
+    .getMany();
+}
+async findByTeam(teamId: number): Promise<Task[]> {
+  return this.taskRepo
+    .createQueryBuilder('task')
+    .leftJoinAndSelect('task.user', 'user')
+    .where('user.team_id = :teamId', { teamId })
+    .getMany();
+}
+
 
   async findByUser(userId: number): Promise<Task[]> {
     return this.taskRepo.find({ where: { user_id: userId } });

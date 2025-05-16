@@ -53,15 +53,32 @@ async update(id: number, data: Partial<LeaveRequest>, user: any): Promise<LeaveR
     return await this.leaveRepo.save(leave)
   }
 
- async findAll(user: any): Promise<LeaveRequest[]> {
-  if ([2, 3].includes(user.role_id)) {
-    return await this.leaveRepo.find({ order: { created_at: 'DESC' } })
+async findAll(user: any): Promise<LeaveRequest[]> {
+  const query = this.leaveRepo
+    .createQueryBuilder('leave')
+    .leftJoinAndSelect('leave.user', 'user')
+
+  if (user.role_id === 2 || user.role_id === 3) {
+    // Owner or HR: See all leave requests for same company
+    return query
+      .where('user.company_id = :companyId', { companyId: user.company_id })
+      .getMany()
   }
-  return await this.leaveRepo.find({
+
+  if (user.role_id === 4) {
+    // Team Leader: See leave requests of users in their team
+    return query
+      .where('user.team_id = :teamId', { teamId: user.team_id })
+      .getMany()
+  }
+
+  // Employee: See only their own leave requests
+  return this.leaveRepo.find({
     where: { user_id: user.id },
-    order: { created_at: 'DESC' }
+    relations: ['user'],
   })
 }
+
 async delete(id: number): Promise<void> {
   const leave = await this.leaveRepo.findOneBy({ id })
   if (!leave) throw new NotFoundException('Leave request not found')

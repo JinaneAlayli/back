@@ -29,24 +29,32 @@ export class AnnouncementsService {
     return this.announcementRepo.save(announcement)
   }
 
-  async findAll(user: any) {
-    const isAdmin = [2, 3].includes(user.role_id)
+ async findAll(user: any): Promise<Announcement[]> {
+  const query = this.announcementRepo.createQueryBuilder('announcement');
 
-    if (isAdmin) {
-      return this.announcementRepo.find({
-        where: { company_id: user.company_id },
-        order: { created_at: 'DESC' },
-      })
-    }
-
-    return this.announcementRepo.find({
-      where: [
-        { company_id: user.company_id, team_id: null },
-        { company_id: user.company_id, team_id: user.team_id },
-      ],
-      order: { created_at: 'DESC' },
-    })
+  if ([2, 3].includes(user.role_id)) {
+     return query
+      .where('announcement.company_id = :companyId', { companyId: user.company_id })
+      .getMany();
   }
+
+  if (user.role_id === 4) {
+     return query
+      .where('announcement.company_id = :companyId', { companyId: user.company_id })
+      .andWhere('(announcement.team_id IS NULL OR announcement.team_id = :teamId)', {
+        teamId: user.team_id,
+      })
+      .getMany();
+  }
+ 
+  return query
+    .where('announcement.company_id = :companyId', { companyId: user.company_id })
+    .andWhere('(announcement.team_id IS NULL OR announcement.team_id = :teamId)', {
+      teamId: user.team_id,
+    })
+    .getMany();
+}
+
 
   async update(id: number, body: any, user: any) {
     const ann = await this.announcementRepo.findOneBy({ id })
