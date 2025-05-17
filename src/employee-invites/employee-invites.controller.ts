@@ -37,10 +37,13 @@ export class EmployeeInvitesController {
     return this.service.findByToken(token);
   }
 
-  @Get()
-  async getAll(): Promise<EmployeeInvite[]> {
-    return this.service.findAll()
-  }
+ @UseGuards(JwtAuthGuard)
+@Get()
+async getAll(@Req() req: FastifyRequest): Promise<EmployeeInvite[]> {
+  const user = req.user as any
+  return this.service.findAllByCompany(user.company_id)
+}
+
 
   @Delete(":id")
   @UseGuards(JwtAuthGuard)

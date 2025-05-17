@@ -91,4 +91,8 @@ export class EmployeeInvitesService {
 
     await this.repo.delete(id)
   }
+  async findAllByCompany(company_id: number): Promise<EmployeeInvite[]> {
+  return this.repo.find({ where: { company_id } })
+}
+
 }
