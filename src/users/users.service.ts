@@ -19,7 +19,7 @@ type SafeUser = Omit<User, "password">
 
 @Injectable()
 export class UsersService {
-  private readonly logger = new Logger(UsersService.name)
+  private readonly logger = new Logger(UsersService.name);
 
   constructor(
     @InjectRepository(User)
@@ -28,7 +28,7 @@ export class UsersService {
     @InjectRepository(EmployeeInvite)
     private inviteRepo: Repository<EmployeeInvite>,
     @InjectRepository(Team)
-  private teamRepo: Repository<Team>, 
+  private teamRepo: Repository<Team>,
   ) {}
 
   async create(userData: {
@@ -39,6 +39,7 @@ export class UsersService {
     role_id?: number
     team_id?: number
     company_id?: number
+    position?: string
   }): Promise<SafeUser> {
     this.logger.log(`Creating new user with email: ${userData.email}`)
 
@@ -58,6 +59,7 @@ export class UsersService {
       role_id: userData.role_id ?? 4,
       team_id: userData.team_id,
       company_id: userData.company_id,
+      position: userData.position, // Save the position
     })
 
     this.logger.log("Saving new user to database")
@@ -116,9 +118,9 @@ export class UsersService {
             company_id: currentUser.company_id,
             is_deleted: false,
           },
-          relations: ['role', 'team'],
+          relations: ["role", "team"],
         })
-                this.logger.log(`Admin/Manager: returning users for company ID: ${currentUser.company_id}`)
+        this.logger.log(`Admin/Manager: returning users for company ID: ${currentUser.company_id}`)
       }
     } else if (currentUser.role_id === 4) {
       if (!currentUser.team_id) {
@@ -178,26 +180,20 @@ export class UsersService {
 
   async delete(id: number) {
     this.logger.log(`Soft-deleting user ${id}`)
-  
+
     const user = await this.findById(id)
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`)
     }
-  
+
     //  Remove user from leader if needed
-    await this.teamRepo.update(
-      { leader: { id } },
-      { leader: undefined }  
-    )
-  
+    await this.teamRepo.update({ leader: { id } }, { leader: undefined })
+
     user.is_deleted = true
     await this.userRepo.save(user)
-  
+
     this.logger.log(`User ${id} marked as deleted (soft delete)`)
-  
+
     return { message: `User ${id} marked as deleted` }
   }
-  
-  
-  
 }

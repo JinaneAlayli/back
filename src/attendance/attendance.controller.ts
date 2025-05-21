@@ -34,7 +34,7 @@ export class AttendanceController {
   }
   @Patch(':id')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
-@Permissions('attendance', 'update') // 👈 Only Owner & HR should have this in DB
+@Permissions('attendance', 'update')  
 updateAttendance(@Param('id') id: number, @Body() body: any, @Req() req: any) {
   return this.service.updateAttendance(+id, body, req.user);
 }
