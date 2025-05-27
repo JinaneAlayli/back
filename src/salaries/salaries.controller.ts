@@ -1,3 +1,4 @@
+// salaries.controller.ts
 import {
   Controller,
   Get,
@@ -8,8 +9,6 @@ import {
   Param,
   UseGuards,
   Req,
-  UploadedFile,
-  UseInterceptors,
   BadRequestException,
 } from '@nestjs/common';
 import { SalariesService } from './salaries.service';
@@ -17,8 +16,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { Permissions } from '../common/decorators/permissions.decorator';
 import { FastifyRequest } from 'fastify';
-import { User } from '../users/user.entity'
-
+import { User } from '../users/user.entity';
 
 @Controller('salaries')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -48,19 +46,18 @@ export class SalariesController {
   }
 
   @Post()
-@Permissions('salaries', 'create')
-async create(@Body() body: any, @Req() req: FastifyRequest) {
-  const user = req.user as User;
-  return this.service.create(body, user);
-}
+  @Permissions('salaries', 'create')
+  async create(@Body() body: any, @Req() req: FastifyRequest) {
+    const user = req.user as User;
+    return this.service.create(body, user);
+  }
 
-
-@Patch(':id')
-@Permissions('salaries', 'update')
-update(@Param('id') id: number, @Body() body: any, @Req() req: FastifyRequest) {
-  const user = req.user as User;
-  return this.service.update(+id, body, user);
-}
+  @Patch(':id')
+  @Permissions('salaries', 'update')
+  update(@Param('id') id: number, @Body() body: any, @Req() req: FastifyRequest) {
+    const user = req.user as User;
+    return this.service.update(+id, body, user);
+  }
 
   @Delete(':id')
   @Permissions('salaries', 'delete')
@@ -84,34 +81,31 @@ update(@Param('id') id: number, @Body() body: any, @Req() req: FastifyRequest) {
 
   @Post(':id/upload-payslip')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
-  @Permissions('salaries', 'upload_payslip') // ✅ Now it matches DB
+  @Permissions('salaries', 'upload_payslip')
   async uploadPayslip(@Param('id') id: number, @Req() req: FastifyRequest) {
-    const parts = req.parts()
-    let file: any = null
-  
+    const parts = req.parts();
+    let file: any = null;
+
     for await (const part of parts) {
       if (part.type === 'file') {
-        file = part
-        break
+        file = part;
+        break;
       }
     }
-  
+
     if (!file) {
-      throw new BadRequestException('No file uploaded')
+      throw new BadRequestException('No file uploaded');
     }
-  
-    return this.service.uploadPayslip(+id, file)
+
+    return this.service.uploadPayslip(+id, file);
   }
+
   @Get(':id/download-payslip')
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
   @Permissions('salaries', 'download_payslip')
-  async downloadPayslip(@Param('id') id: string, @Req() req: FastifyRequest) {
+  async downloadPayslip(@Param('id') id: number, @Req() req: FastifyRequest) {
     if (!req.user) {
       throw new BadRequestException('User not authenticated');
     }
-  
-return this.service.downloadPayslip(+id, req.user as User);
+    return this.service.downloadPayslip(+id, req.user as User);
   }
-  
-
 }

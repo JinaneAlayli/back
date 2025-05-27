@@ -1,175 +1,112 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
-import { InjectRepository } from '@nestjs/typeorm'
-import { Repository } from 'typeorm'
-import { Salary } from './salaries.entity'
-import { BadRequestException,ForbiddenException } from '@nestjs/common';
-import { User } from '../users/user.entity'
+// salaries.service.ts
+import { Injectable, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Salary } from './salaries.entity';
+import { User } from '../users/user.entity';
 import { UploadService } from '../common/upload/upload.service';
-import type { MultipartFile } from '@fastify/multipart';
+
 
 @Injectable()
 export class SalariesService {
   constructor(
     @InjectRepository(Salary)
-    private readonly repo: Repository<Salary>,
-    private readonly uploadService: UploadService,
+    private salaryRepo: Repository<Salary>,
+     private readonly uploadService: UploadService,
   ) {}
-  findAll(): Promise<Salary[]> {
-    return this.repo.find({ relations: ['user'] })
+
+  async findActiveSalariesByCompany(company_id: number) {
+    return this.salaryRepo
+      .createQueryBuilder('salary')
+      .leftJoinAndSelect('salary.user', 'user')
+      .where('user.company_id = :company_id', { company_id })
+      .getMany();
   }
 
-  findByUser(userId: number): Promise<Salary[]> {
-    return this.repo.find({
-      where: { user_id: userId },
-      order: { year: 'DESC', month: 'DESC' },
-    })
+  async findByUser(userId: number) {
+    return this.salaryRepo.find({ where: { user_id: userId }, order: { year: 'DESC', month: 'DESC' } });
   }
 
-  // Get all salaries for active (non-deleted) users in the same company
-  findActiveSalariesByCompany(company_id: number): Promise<Salary[]> {
-    return this.repo.find({
-      where: {
-        user: {
-          company_id,
-          is_deleted: false,
-        },
-      },
-      relations: ['user'],
-      order: { year: 'DESC', month: 'DESC' },
-    })
+  async findOne(id: number) {
+    const salary = await this.salaryRepo.findOne({ where: { id }, relations: ['user'] });
+    if (!salary) throw new NotFoundException('Salary not found');
+    return salary;
   }
 
-  findOne(id: number): Promise<Salary> {
-    return this.repo.findOneOrFail({ where: { id }, relations: ['user'] })
-  }
-
-  async create(data: Partial<Salary>, user: User): Promise<Salary> {
-    // Prevent duplicate salary for same user, month, year
-    const existing = await this.repo.findOne({
-      where: {
-        user_id: data.user_id,
-        month: data.month,
-        year: data.year,
-      },
-    });
-  
-    if (existing) {
-      throw new BadRequestException("Salary for this month already exists");
+  async create(body: any, user: User) {
+    if (![2, 3].includes(user.role_id)) {
+      throw new ForbiddenException('You are not allowed to create salaries');
     }
-  
-    // Validate effective_from date
-    const effectiveDate = new Date(data.effective_from || "");
-    const now = new Date();
-  
-    if (isNaN(effectiveDate.getTime())) {
-      throw new BadRequestException("Invalid effective_from date format");
-    }
-  
-    const oneYearAgo = new Date();
-    oneYearAgo.setFullYear(now.getFullYear() - 1);
-  
-    // Strict validation for employee/leader (role_id > 3)
-    if (user.role_id > 3) {
-      if (effectiveDate > now) {
-        throw new BadRequestException("Effective date cannot be in the future");
-      }
-      if (effectiveDate < oneYearAgo) {
-        throw new BadRequestException("Effective date is too old");
-      }
-    }
-  
-    const salary = this.repo.create(data);
-    return this.repo.save(salary);
-  }
-  
-
-  async update(id: number, data: Partial<Salary>, user: User): Promise<Salary> {
-    if (data.effective_from && isNaN(Date.parse(data.effective_from))) {
-      throw new BadRequestException('Invalid effective_from date format');
-    }
-  
-    const effectiveDate = new Date(data.effective_from || "");
-    const now = new Date();
-    const oneYearAgo = new Date();
-    oneYearAgo.setFullYear(now.getFullYear() - 1);
-  
-    if (user.role_id > 3) {
-      if (effectiveDate > now) {
-        throw new BadRequestException("Effective date cannot be in the future");
-      }
-      if (effectiveDate < oneYearAgo) {
-        throw new BadRequestException("Effective date is too old");
-      }
-    }
-  
-    const updatedData: Partial<Salary> = {
-      user_id: Number(data.user_id),
-      base_salary: Number(data.base_salary),
-      bonus: Number(data.bonus || 0),
-      overtime: Number(data.overtime || 0),
-      deductions: Number(data.deductions || 0),
-      month: Number(data.month),
-      year: Number(data.year),
-      effective_from: data.effective_from,
-      status: data.status || 'pending',
-    };
-  
-    await this.repo.update(id, updatedData);
-    return this.findOne(id);
-  }
-  
-  
-
-  delete(id: number): Promise<any> {
-    return this.repo.delete(id)
+    const salary = this.salaryRepo.create(body);
+    return this.salaryRepo.save(salary);
   }
 
-  async requestPayslip(requester: any, targetUserId: number) {
+  async update(id: number, body: any, user: User) {
+    const salary = await this.salaryRepo.findOne({ where: { id }, relations: ['user'] });
+    if (!salary) throw new NotFoundException('Salary record not found');
+
+    const canEdit = [2, 3].includes(user.role_id);
+    if (!canEdit) throw new ForbiddenException('Not allowed to update salary');
+
+    if (body.file_url === null) {
+      salary.file_url = '';
+      salary.payslip_requested = false;
+    } else {
+      Object.assign(salary, body);
+    }
+
+    return this.salaryRepo.save(salary);
+  }
+
+  async delete(id: number) {
+    const salary = await this.salaryRepo.findOneBy({ id });
+    if (!salary) throw new NotFoundException('Salary not found');
+    return this.salaryRepo.remove(salary);
+  }
+
+  async requestPayslip(currentUser: any, targetUserId: number) {
     const today = new Date();
-    const CURRENT_MONTH = today.getMonth() + 1;
-    const CURRENT_YEAR = today.getFullYear();
+    const month = today.getMonth() + 1;
+    const year = today.getFullYear();
 
-    const salary = await this.repo.findOne({
-      where: { user_id: targetUserId, month: CURRENT_MONTH, year: CURRENT_YEAR },
-    });
+    const salary = await this.salaryRepo.findOne({ where: { user_id: targetUserId, month, year } });
+    if (!salary) throw new NotFoundException('Salary not found for this month');
 
-    if (!salary) {
-      throw new NotFoundException('Salary record not found');
+    if (salary.file_url) {
+      throw new ForbiddenException('Payslip already uploaded');
+    }
+
+    const canRequest = [2, 3, 4, 5].includes(currentUser.role_id) ;
+    if (!canRequest) {
+      throw new ForbiddenException('You are not allowed to request payslip for this user');
     }
 
     salary.payslip_requested = true;
-    return this.repo.save(salary);
+    return this.salaryRepo.save(salary);
   }
-  async uploadPayslip(salaryId: number, file: MultipartFile): Promise<Salary> {
-    const salary = await this.repo.findOne({ where: { id: salaryId } });
-    if (!salary) {
-      throw new NotFoundException('Salary record not found');
-    }
 
-    const fileUrl = await this.uploadService.uploadPayslipFile(file, salary.user_id)
+  async uploadPayslip(id: number, file: any) {
+    if (!file?.filename) throw new BadRequestException('No file uploaded');
+
+    const salary = await this.salaryRepo.findOne({ where: { id }, relations: ['user'] });
+    if (!salary) throw new NotFoundException('Salary not found');
+const fileUrl = await this.uploadService.uploadPayslipFile(file, salary.user_id)
     salary.file_url = fileUrl;
     salary.payslip_requested = false;
-    return this.repo.save(salary);
+    return this.salaryRepo.save(salary);
   }
-  async downloadPayslip(salaryId: number, user: User) {
-    const salary = await this.repo.findOne({
-      where: { id: salaryId },
-      relations: ['user'],
-    });
 
+  async downloadPayslip(id: number, user: User) {
+    const salary = await this.salaryRepo.findOne({ where: { id }, relations: ['user'] });
     if (!salary || !salary.file_url) {
-      throw new NotFoundException('Payslip not found');
-    }
- 
-    if (
-      user.role_id > 3 && // Leader or Employee
-      salary.user_id !== user.id // trying to access another user’s file
-    ) {
-      throw new ForbiddenException('You can only download your own payslip');
+      throw new NotFoundException('Payslip not available');
     }
 
-    return {
-      url: salary.file_url,
-    };
+    const canDownload = [2, 3].includes(user.role_id) || salary.user.id === user.id;
+    if (!canDownload) {
+      throw new ForbiddenException('Not allowed to download this payslip');
+    }
+
+    return { file_url: salary.file_url };
   }
 }
